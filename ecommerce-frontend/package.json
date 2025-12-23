@@ -64,8 +64,12 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test":  "react-scripts test",
+    "eject": "react-scripts eject",
+    "serve": "node server/index.js",
+    "docker:build": "docker build -t ecommerce-frontend .",
+    "docker: run": "docker run -p 3000:3000 ecommerce-frontend",
+    "health": "curl -f http://localhost:3000/health || exit 1"
   },
   "eslintConfig": {
     "extends": [
