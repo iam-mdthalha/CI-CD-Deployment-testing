@@ -186,6 +186,7 @@ jobs:
           context: ./ecommerce-frontend
           file: ./ecommerce-frontend/Dockerfile
           push: false
+          load: true
           tags: |
             ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
             ${{ env.DOCKER_IMAGE_NAME }}:pr-${{ github.event.pull_request.number || 'manual' }}
