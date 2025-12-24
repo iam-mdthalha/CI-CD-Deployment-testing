@@ -397,7 +397,7 @@ jobs:
             **Ready for review! **
             
             ---
-            *Commit: ${{ github.event.pull_request.head. sha }}*`
+            *Commit: ${{ github.event.pull_request.head.sha }}*`
             })
 
       - name: Post PR Comment (Failure)
@@ -413,7 +413,7 @@ jobs:
             
             | Check | Status |
             |-------|--------|
-            | Lint | ${{ needs.lint. result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Lint | ${{ needs.lint.result == 'success' && '✅ Passed' || '❌ Failed' }} |
             | Test | ⏭️ Skipped |
             | Build | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |
             | Docker Build | ${{ needs.docker-build.result == 'success' && '✅ Passed' || '❌ Failed' }} |
@@ -422,5 +422,5 @@ jobs:
             **Please fix the failing checks before merging.**
             
             ---
-            *Commit:  ${{ github.event.pull_request. head.sha }}*`
+            *Commit:  ${{ github.event.pull_request.head.sha }}*`
             })
