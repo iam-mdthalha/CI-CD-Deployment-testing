@@ -61,7 +61,7 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run: npm Install
+        run: npm ci
 
       - name: Run ESLint (Warnings Only)
         run: |
@@ -118,7 +118,7 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name:  Build React Application
         run: |
@@ -299,8 +299,7 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run: npm install
-
+        run: npm ci
       - name:  Run npm audit
         run:  |
           echo "=== Running npm audit ==="
