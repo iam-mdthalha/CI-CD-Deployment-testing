@@ -103,7 +103,7 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm install
 
       - name:  Run Tests
         run: |
