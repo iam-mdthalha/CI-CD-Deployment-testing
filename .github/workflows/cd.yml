@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 20
 
     outputs:
-      image_tag: ${{ steps. meta.outputs.version }}
+      image_tag: ${{ steps.meta.outputs.version }}
       full_image:  ${{ steps.meta.outputs.tags }}
 
     steps: 
@@ -61,7 +61,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets. DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest
@@ -73,7 +73,7 @@ jobs:
           context: ./ecommerce-frontend
           file: ./ecommerce-frontend/Dockerfile
           push: true
-          tags: ${{ steps. meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels:  ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -89,7 +89,7 @@ jobs:
           echo ""
           echo "Image:  ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
           echo "Tags:"
-          echo "${{ steps.meta. outputs.tags }}"
+          echo "${{ steps.meta.outputs.tags }}"
           echo ""
           echo "=========================================="
 
@@ -113,13 +113,13 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
-          echo "image=${{ secrets. DOCKERHUB_USERNAME }}/${{ env. DOCKER_IMAGE_NAME }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "image=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Deploy to EC2 via SSH
-        uses:  appleboy/ssh-action@v1. 0.3
+        uses:  appleboy/ssh-action@v1.0.3
         with: 
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets. EC2_USERNAME }}
+          username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           timeout: 60s
@@ -130,7 +130,7 @@ jobs:
             echo "=========================================="
             echo "       STARTING DEPLOYMENT               "
             echo "=========================================="
-            echo "Image: ${{ steps.deploy-info. outputs.image }}"
+            echo "Image: ${{ steps.deploy-info.outputs.image }}"
             echo "Time: $(date)"
             echo ""
             
@@ -160,7 +160,7 @@ jobs:
               -p 3000:3000 \
               -e NODE_ENV=production \
               -e SERVICE_NAME=${{ env.SERVICE_NAME }} \
-              -e SERVICE_VERSION=${{ steps.deploy-info.outputs. short_sha }} \
+              -e SERVICE_VERSION=${{ steps.deploy-info.outputs.short_sha }} \
               ${IMAGE}:${TAG}
             
             # Wait for container to start
@@ -237,7 +237,7 @@ jobs:
           echo "Build & Push:     ${{ needs.build-and-push.result }}"
           echo "Deploy to EC2:   ${{ needs.deploy.result }}"
           echo ""
-          echo "Commit:           ${{ github. sha }}"
+          echo "Commit:           ${{ github.sha }}"
           echo "Branch:          ${{ github.ref_name }}"
           echo "Triggered by:    ${{ github.actor }}"
           echo ""
@@ -245,8 +245,8 @@ jobs:
 
       - name: Check Overall Status
         run:  |
-          if [[ "${{ needs.build-and-push. result }}" == "failure" ]] || \
-             [[ "${{ needs.deploy. result }}" == "failure" ]]; then
+          if [[ "${{ needs.build-and-push.result }}" == "failure" ]] || \
+             [[ "${{ needs.deploy.result }}" == "failure" ]]; then
             echo "❌ DEPLOYMENT FAILED"
             exit 1
           else
@@ -268,7 +268,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with: 
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets. EC2_USERNAME }}
+          username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           timeout: 60s
@@ -280,7 +280,7 @@ jobs:
             echo "=========================================="
             
             CONTAINER_NAME="${{ env.SERVICE_NAME }}"
-            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env. DOCKER_IMAGE_NAME }}"
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
             
             # Stop failed container
             echo "=== Stopping failed container ==="
