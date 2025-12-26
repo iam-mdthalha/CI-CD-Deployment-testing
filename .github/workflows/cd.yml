@@ -1,0 +1,319 @@
+# =============================================================================
+# CD Workflow - Continuous Deployment
+# =============================================================================
+# Triggers:  Push to main branch (after PR merge)
+# Purpose: Build, push to DockerHub, deploy to EC2
+# =============================================================================
+
+name: deploy
+
+on:
+  push:
+    branches: 
+      - main
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env: 
+  NODE_VERSION: '20'
+  DOCKER_IMAGE_NAME: ecommerce-frontend
+  SERVICE_NAME: ecommerce-frontend
+  WORKING_DIRECTORY: ./ecommerce-frontend
+
+# =============================================================================
+# Prevent concurrent deployments
+# =============================================================================
+concurrency: 
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # JOB 1: Build and Push to DockerHub
+  # ===========================================================================
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+      full_image:  ${{ steps.meta.outputs.tags }}
+
+    steps: 
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name:  Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name:  Login to DockerHub
+        uses: docker/login-action@v3
+        with: 
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name:  Generate Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest
+            type=raw,value={{date 'YYYYMMDD-HHmmss'}}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ecommerce-frontend
+          file: ./ecommerce-frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels:  ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args:  |
+            NODE_ENV=production
+            SERVICE_NAME=${{ env.SERVICE_NAME }}
+
+      - name:  Verify Push
+        run: |
+          echo "=========================================="
+          echo "       IMAGE PUSHED TO DOCKERHUB         "
+          echo "=========================================="
+          echo ""
+          echo "Image:  ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
+          echo "Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo ""
+          echo "=========================================="
+
+  # ===========================================================================
+  # JOB 2: Deploy to EC2
+  # ===========================================================================
+  deploy: 
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-push
+
+    steps:
+      - name:  Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Generate Deployment Info
+        id: deploy-info
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "image=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to EC2 via SSH
+        uses:  appleboy/ssh-action@v1. 0.3
+        with: 
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 10m
+          script: |
+            set -e
+            
+            echo "=========================================="
+            echo "       STARTING DEPLOYMENT               "
+            echo "=========================================="
+            echo "Image: ${{ steps.deploy-info.outputs.image }}"
+            echo "Time: $(date)"
+            echo ""
+            
+            # Variables
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
+            TAG="${{ steps.deploy-info.outputs. short_sha }}"
+            CONTAINER_NAME="${{ env.SERVICE_NAME }}"
+            
+            # Login to DockerHub
+            echo "=== Logging into DockerHub ==="
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            
+            # Pull new image
+            echo "=== Pulling new image ==="
+            docker pull ${IMAGE}:${TAG}
+            
+            # Stop and remove old container (if exists)
+            echo "=== Stopping old container ==="
+            docker stop ${CONTAINER_NAME} 2>/dev/null || true
+            docker rm ${CONTAINER_NAME} 2>/dev/null || true
+            
+            # Run new container
+            echo "=== Starting new container ==="
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e NODE_ENV=production \
+              -e SERVICE_NAME=${{ env.SERVICE_NAME }} \
+              -e SERVICE_VERSION=${{ steps.deploy-info.outputs. short_sha }} \
+              ${IMAGE}:${TAG}
+            
+            # Wait for container to start
+            echo "=== Waiting for container to start ==="
+            sleep 10
+            
+            # Health check
+            echo "=== Running health check ==="
+            for i in {1.. 5}; do
+              echo "Health check attempt $i..."
+              if curl -sf http://localhost:3000/health; then
+                echo ""
+                echo "✅ Health check passed!"
+                break
+              fi
+              if [ $i -eq 5 ]; then
+                echo "❌ Health check failed after 5 attempts"
+                echo "=== Container logs ==="
+                docker logs ${CONTAINER_NAME}
+                exit 1
+              fi
+              sleep 5
+            done
+            
+            # Show running container
+            echo ""
+            echo "=== Deployment successful ==="
+            docker ps | grep ${CONTAINER_NAME}
+            
+            # Cleanup old images
+            echo ""
+            echo "=== Cleaning up old images ==="
+            docker image prune -f
+            
+            echo ""
+            echo "=========================================="
+            echo "       DEPLOYMENT COMPLETE               "
+            echo "=========================================="
+
+      - name:  Verify Deployment
+        run: |
+          echo "=== Verifying deployment externally ==="
+          sleep 5
+          
+          for i in {1.. 5}; do
+            echo "Verification attempt $i..."
+            if curl -sf http://${{ secrets.EC2_HOST }}:3000/health; then
+              echo ""
+              echo "✅ External health check passed!"
+              exit 0
+            fi
+            sleep 5
+          done
+          
+          echo "⚠️ External health check failed - may need to check security group"
+
+  # ===========================================================================
+  # JOB 3: Deployment Summary
+  # ===========================================================================
+  deployment-summary:
+    name:  Deployment Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-and-push, deploy]
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "=========================================="
+          echo "       DEPLOYMENT PIPELINE SUMMARY       "
+          echo "=========================================="
+          echo ""
+          echo "Build & Push:     ${{ needs.build-and-push.result }}"
+          echo "Deploy to EC2:   ${{ needs.deploy.result }}"
+          echo ""
+          echo "Commit:           ${{ github.sha }}"
+          echo "Branch:          ${{ github.ref_name }}"
+          echo "Triggered by:    ${{ github.actor }}"
+          echo ""
+          echo "=========================================="
+
+      - name: Check Overall Status
+        run:  |
+          if [[ "${{ needs.build-and-push.result }}" == "failure" ]] || \
+             [[ "${{ needs.deploy.result }}" == "failure" ]]; then
+            echo "❌ DEPLOYMENT FAILED"
+            exit 1
+          else
+            echo "✅ DEPLOYMENT SUCCESSFUL"
+          fi
+
+  # ===========================================================================
+  # JOB 4: Rollback on Failure (Optional - Manual Trigger)
+  # ===========================================================================
+  rollback: 
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy
+    if: failure()
+
+    steps:
+      - name:  Rollback to Previous Version
+        uses: appleboy/ssh-action@v1.0.3
+        with: 
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          script: |
+            set -e
+            
+            echo "=========================================="
+            echo "       STARTING ROLLBACK                 "
+            echo "=========================================="
+            
+            CONTAINER_NAME="${{ env.SERVICE_NAME }}"
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
+            
+            # Stop failed container
+            echo "=== Stopping failed container ==="
+            docker stop ${CONTAINER_NAME} 2>/dev/null || true
+            docker rm ${CONTAINER_NAME} 2>/dev/null || true
+            
+            # Run latest stable (previous) image
+            echo "=== Rolling back to latest image ==="
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e NODE_ENV=production \
+              -e SERVICE_NAME=${{ env.SERVICE_NAME }} \
+              -e SERVICE_VERSION=rollback \
+              ${IMAGE}:latest
+            
+            # Wait and verify
+            sleep 10
+            
+            if curl -sf http://localhost:3000/health; then
+              echo "✅ Rollback successful!"
+            else
+              echo "❌ Rollback failed - manual intervention required"
+              docker logs ${CONTAINER_NAME}
+              exit 1
+            fi
+            
+            echo "=========================================="
+            echo "       ROLLBACK COMPLETE                 "
+            echo "=========================================="
+
+      - name: Notify Rollback
+        run: |
+          echo "⚠️ DEPLOYMENT FAILED - ROLLBACK EXECUTED"
+          echo "Please check the logs and fix the issue."
