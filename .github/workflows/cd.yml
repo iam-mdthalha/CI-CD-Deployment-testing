@@ -205,7 +205,7 @@ jobs:
           echo "=== Verifying deployment externally ==="
           sleep 5
           
-          for i in {1.. 5}; do
+          for i in {1..5}; do
             echo "Verification attempt $i..."
             if curl -sf http://${{ secrets.EC2_HOST }}:3000/health; then
               echo ""
