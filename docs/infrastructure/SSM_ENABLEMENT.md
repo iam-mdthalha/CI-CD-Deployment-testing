@@ -347,22 +347,22 @@ aws ssm update-document \
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    SSM BENEFITS                                  │
+│                    SSM BENEFITS                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Security:                                                        │
+│  Security:                                                      │
 │  ├── No SSH port (22) exposed          ✅                       │
 │  ├── IAM-based authentication          ✅                       │
 │  ├── No SSH key management             ✅                       │
 │  └── Encrypted communication           ✅                       │
 │                                                                 │
-│  Compliance:                                                     │
+│  Compliance:                                                    │
 │  ├── Full session recording            ✅                       │
 │  ├── CloudTrail integration            ✅                       │
 │  ├── Audit logging                     ✅                       │
 │  └── Access control via IAM            ✅                       │
 │                                                                 │
-│  Operations:                                                     │
+│  Operations:                                                    │
 │  ├── Browser-based access              ✅                       │
 │  ├── No bastion host needed            ✅                       │
 │  ├── Works in private subnets          ✅                       │
