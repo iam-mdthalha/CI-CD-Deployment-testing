@@ -197,7 +197,7 @@ jobs:
             
             echo ""
             echo "=========================================="
-            echo "       DEPLOYMENT COMPLETE               "
+            echo "       DEPLOYMENT COMPLETED               "
             echo "=========================================="
 
       - name:  Verify Deployment
