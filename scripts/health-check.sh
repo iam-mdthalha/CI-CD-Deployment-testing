@@ -71,7 +71,7 @@ fi
 echo ""
 echo "  Docker Containers:"
 echo "  ──────────────────"
-docker ps --format "  {{. Names}}: {{. Status}}" 2>/dev/null | grep -E "ecommerce" || echo "  No containers found"
+docker ps --format "  {{.Names}}: {{.Status}}" 2>/dev/null | grep -E "ecommerce" || echo "  No containers found"
 
 echo ""
 echo "============================================================================="
