@@ -106,7 +106,7 @@ jobs:
     
     environment: 
       name: production
-      url: https://${{ secrets.EC2_PUBLIC_IP || 'your-domain.com' }}
+      url: https://${{ secrets.EC2_PUBLIC_IP }}
     
     steps:
       - name: 🔐 Configure AWS credentials
