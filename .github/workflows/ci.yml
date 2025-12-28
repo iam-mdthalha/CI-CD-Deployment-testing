@@ -11,11 +11,13 @@ on:
   pull_request: 
     branches: 
       - main
-      - dev
     types: 
       - opened
       - synchronize
       - reopened
+    paths:
+      - 'ecommerce-frontend/**'
+      - '.github/workflows/ci.yml'
 
   # Allow manual trigger for testing
   workflow_dispatch:
