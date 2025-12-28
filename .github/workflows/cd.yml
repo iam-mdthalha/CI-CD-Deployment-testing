@@ -256,7 +256,7 @@ jobs:
               "echo \"========================================\"",
               "",
               "# Show container status",
-              "docker ps --format \"table {{.Names}}\t{{.Status}}\t{{. Ports}}\" | grep -E \"(NAMES|ecommerce)\""
+              "docker ps --format \"table {{.Names}}\t{{.Status}}\t{{.Ports}}\" | grep -E \"(NAMES|ecommerce)\""
             ]' \
             --timeout-seconds 300 \
             --output text \
