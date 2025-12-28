@@ -276,7 +276,7 @@ jobs:
             set -e
             
             echo "=========================================="
-            echo "       STARTING ROLLBACK                 "
+            echo "       STARTING THE ROLLBACK                 "
             echo "=========================================="
             
             CONTAINER_NAME="${{ env.SERVICE_NAME }}"
