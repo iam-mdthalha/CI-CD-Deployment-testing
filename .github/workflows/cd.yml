@@ -14,7 +14,7 @@ on:
   push: 
     branches: 
       - main
-    paths: 
+    paths:  
       - 'ecommerce-frontend/**'
       - '. github/workflows/cd.yml'
   
@@ -24,10 +24,10 @@ on:
 # Prevent concurrent deployments
 concurrency:
   group: production-deployment
-  cancel-in-progress: false
+  cancel-in-progress:  false
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-frontend
+  DOCKER_IMAGE:  ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-frontend
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
@@ -113,7 +113,7 @@ jobs:
           
           echo "✅ EC2 instance is online in SSM"
       
-      - name: 🚀 Deploy via SSM (Blue-Green)
+      - name:  🚀 Deploy via SSM (Blue-Green)
         id: deploy
         run: |
           echo "Starting Blue-Green deployment..."
@@ -219,7 +219,7 @@ jobs:
             --query 'StandardOutputContent' \
             --output text
       
-      - name: 📋 Health check summary
+      - name:  📋 Health check summary
         run: |
           echo "### 🏥 Health Check Complete" >> $GITHUB_STEP_SUMMARY
           echo "✅ Deployment verified" >> $GITHUB_STEP_SUMMARY
