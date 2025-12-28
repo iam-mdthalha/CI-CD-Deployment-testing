@@ -1,11 +1,6 @@
 # =============================================================================
 # CD Pipeline - Production Deployment via SSM (Blue-Green)
 # =============================================================================
-#
-# Triggers:  Push to main branch (after PR merge)
-# Deploys:  Blue-Green deployment via AWS SSM (no SSH required)
-#
-# =============================================================================
 
 name: CD Pipeline - Deploy to Production
 
@@ -13,29 +8,26 @@ on:
   push:
     branches: 
       - main
-    paths: 
+    paths:  
       - 'ecommerce-frontend/**'
       - '. github/workflows/cd.yml'
   
-  # Manual trigger
-  workflow_dispatch: 
-    inputs:
-      environment: 
+  workflow_dispatch:
+    inputs: 
+      environment:
         description: 'Deployment environment'
         required: true
         default: 'production'
         type: choice
-        options: 
+        options:
           - production
-          - staging
 
-# Prevent concurrent deployments
 concurrency: 
   group: production-deployment
-  cancel-in-progress: false
+  cancel-in-progress:  false
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-frontend
+  DOCKER_IMAGE:  ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-frontend
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
@@ -48,11 +40,10 @@ jobs:
     
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
-      full_image:  ${{ steps.meta.outputs.tags }}
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses:  actions/checkout@v4
       
       - name: 🏷️ Generate Docker metadata
         id: meta
@@ -62,7 +53,6 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest
-            type=raw,value={{date 'YYYYMMDD-HHmmss'}}
       
       - name: 🔐 Login to DockerHub
         uses: docker/login-action@v3
@@ -83,18 +73,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            NODE_ENV=production
       
       - name: 📋 Output image info
         run: |
           echo "### 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.DOCKER_IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.DOCKER_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # JOB 2: Deploy via SSM (Blue-Green)
@@ -133,131 +116,18 @@ jobs:
           
           echo "✅ EC2 instance is online in SSM"
       
-      - name: 🚀 Deploy via SSM (Blue-Green)
+      - name:  🚀 Deploy via SSM (Blue-Green)
         id: deploy
         run: |
           echo "Starting Blue-Green deployment..."
           echo "Image: ${{ env.DOCKER_IMAGE }}:latest"
           
-          # Send deployment command via SSM
+          # Send simple command to run the deployment script
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "GitHub Actions Deployment - ${{ github.sha }}" \
-            --parameters 'commands=[
-              "#!/bin/bash",
-              "set -e",
-              "echo \"========================================\"",
-              "echo \"GitHub Actions Deployment\"",
-              "echo \"Commit: ${{ github.sha }}\"",
-              "echo \"========================================\"",
-              "",
-              "# Variables",
-              "DOCKER_IMAGE=\"${{ env.DOCKER_IMAGE }}: latest\"",
-              "BLUE_PORT=3001",
-              "GREEN_PORT=3002",
-              "BLUE_CONTAINER=\"ecommerce-blue\"",
-              "GREEN_CONTAINER=\"ecommerce-green\"",
-              "STATE_FILE=\"/var/lib/deployment/state.json\"",
-              "NGINX_BACKEND_CONF=\"/etc/nginx/conf.d/active-backend.conf\"",
-              "",
-              "# Ensure directories exist",
-              "mkdir -p /var/lib/deployment",
-              "mkdir -p /var/log/deployment",
-              "",
-              "# Initialize state file if not exists",
-              "if [ !  -f \"$STATE_FILE\" ]; then",
-              "  echo \"{\\\"active\\\":\\\"blue\\\",\\\"blue_port\\\": 3001,\\\"green_port\\\":3002}\" > \"$STATE_FILE\"",
-              "fi",
-              "",
-              "# Get current state",
-              "CURRENT_ACTIVE=$(cat \"$STATE_FILE\" | grep -o '\"active\": \"[^\"]*\"' | cut -d'\"' -f4)",
-              "echo \"Current active: $CURRENT_ACTIVE\"",
-              "",
-              "# Determine standby",
-              "if [ \"$CURRENT_ACTIVE\" == \"blue\" ]; then",
-              "  STANDBY_PORT=$GREEN_PORT",
-              "  STANDBY_CONTAINER=$GREEN_CONTAINER",
-              "  STANDBY_COLOR=\"green\"",
-              "else",
-              "  STANDBY_PORT=$BLUE_PORT",
-              "  STANDBY_CONTAINER=$BLUE_CONTAINER",
-              "  STANDBY_COLOR=\"blue\"",
-              "fi",
-              "echo \"Deploying to:  $STANDBY_COLOR (port $STANDBY_PORT)\"",
-              "",
-              "# Pull new image",
-              "echo \"Pulling image:  $DOCKER_IMAGE\"",
-              "docker pull \"$DOCKER_IMAGE\"",
-              "",
-              "# Stop and remove existing standby container",
-              "docker stop \"$STANDBY_CONTAINER\" 2>/dev/null || true",
-              "docker rm \"$STANDBY_CONTAINER\" 2>/dev/null || true",
-              "",
-              "# Start new container",
-              "echo \"Starting container on port $STANDBY_PORT\"",
-              "docker run -d \\",
-              "  --name \"$STANDBY_CONTAINER\" \\",
-              "  --restart unless-stopped \\",
-              "  -p \"$STANDBY_PORT:3000\" \\",
-              "  -e NODE_ENV=production \\",
-              "  \"$DOCKER_IMAGE\"",
-              "",
-              "# Wait for container to be healthy",
-              "echo \"Waiting for health check...\"",
-              "HEALTH_TIMEOUT=60",
-              "ELAPSED=0",
-              "while [ $ELAPSED -lt $HEALTH_TIMEOUT ]; do",
-              "  HTTP_CODE=$(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:$STANDBY_PORT/health\" 2>/dev/null || echo \"000\")",
-              "  if [ \"$HTTP_CODE\" == \"200\" ]; then",
-              "    echo \"✅ Health check passed\"",
-              "    break",
-              "  fi",
-              "  echo \"Waiting... ($ELAPSED seconds, HTTP:  $HTTP_CODE)\"",
-              "  sleep 5",
-              "  ELAPSED=$((ELAPSED + 5))",
-              "done",
-              "",
-              "if [ \"$HTTP_CODE\" != \"200\" ]; then",
-              "  echo \"❌ Health check failed\"",
-              "  docker stop \"$STANDBY_CONTAINER\" 2>/dev/null || true",
-              "  docker rm \"$STANDBY_CONTAINER\" 2>/dev/null || true",
-              "  exit 1",
-              "fi",
-              "",
-              "# Update Nginx",
-              "echo \"Switching traffic to $STANDBY_COLOR\"",
-              "cat > \"$NGINX_BACKEND_CONF\" << EOF",
-              "upstream active_backend {",
-              "    server 127.0.0.1:$STANDBY_PORT;",
-              "    keepalive 32;",
-              "}",
-              "EOF",
-              "",
-              "# Reload Nginx",
-              "nginx -t && systemctl reload nginx",
-              "",
-              "# Update state",
-              "cat > \"$STATE_FILE\" << EOF",
-              "{",
-              "  \"active\": \"$STANDBY_COLOR\",",
-              "  \"blue_port\":  3001,",
-              "  \"green_port\": 3002,",
-              "  \"previous_active\": \"$CURRENT_ACTIVE\",",
-              "  \"last_deployment\": \"$DOCKER_IMAGE\",",
-              "  \"last_deployment_time\": \"$(date -Iseconds)\",",
-              "  \"commit\": \"${{ github.sha }}\"",
-              "}",
-              "EOF",
-              "",
-              "echo \"========================================\"",
-              "echo \"✅ Deployment Complete! \"",
-              "echo \"Active:  $STANDBY_COLOR (port $STANDBY_PORT)\"",
-              "echo \"========================================\"",
-              "",
-              "# Show container status",
-              "docker ps --format \"table {{.Names}}\t{{.Status}}\t{{.Ports}}\" | grep -E \"(NAMES|ecommerce)\""
-            ]' \
+            --parameters "commands=[\"sudo /usr/local/bin/deploy-app.sh ${{ env.DOCKER_IMAGE }}:latest\"]" \
             --timeout-seconds 300 \
             --output text \
             --query 'Command.CommandId')
@@ -268,67 +138,40 @@ jobs:
           # Wait for command to complete
           echo "Waiting for deployment to complete..."
           
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
-            || true
-          
-          # Get command status
-          STATUS=$(aws ssm get-command-invocation \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
-            --query 'Status' \
-            --output text)
-          
-          echo "Deployment status: $STATUS"
+          for i in {1..60}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo "Pending")
+            
+            echo "Status: $STATUS ($i/60)"
+            
+            if [ "$STATUS" == "Success" ]; then
+              echo "✅ Deployment successful!"
+              break
+            elif [ "$STATUS" == "Failed" ] || [ "$STATUS" == "Cancelled" ] || [ "$STATUS" == "TimedOut" ]; then
+              echo "❌ Deployment failed with status: $STATUS"
+              
+              echo ""
+              echo "=== Error Output ==="
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
+                --query 'StandardErrorContent' \
+                --output text || true
+              
+              exit 1
+            fi
+            
+            sleep 5
+          done
           
           # Get command output
           echo ""
           echo "=== Deployment Output ==="
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
-            --query 'StandardOutputContent' \
-            --output text
-          
-          # Check for errors
-          if [ "$STATUS" != "Success" ]; then
-            echo ""
-            echo "=== Error Output ==="
-            aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
-              --query 'StandardErrorContent' \
-              --output text
-            exit 1
-          fi
-          
-          echo ""
-          echo "✅ Deployment successful!"
-      
-      - name: ✅ Verify deployment
-        run: |
-          echo "Verifying deployment..."
-          
-          # Give Nginx a moment to reload
-          sleep 5
-          
-          # Check health via SSM
-          VERIFY_COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "curl -sk https://localhost/health || curl -s http://localhost/health",
-              "cat /var/lib/deployment/state.json"
-            ]' \
-            --output text \
-            --query 'Command.CommandId')
-          
-          sleep 10
-          
-          echo "=== Health Check ==="
-          aws ssm get-command-invocation \
-            --command-id "$VERIFY_COMMAND_ID" \
             --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
             --query 'StandardOutputContent' \
             --output text
@@ -341,7 +184,6 @@ jobs:
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Image** | \`${{ env.DOCKER_IMAGE }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Instance** | \`${{ secrets.EC2_INSTANCE_ID }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Method** | SSM (Blue-Green) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Time** | $(date -u) |" >> $GITHUB_STEP_SUMMARY
 
@@ -361,55 +203,33 @@ jobs:
           aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       
-      - name: 🏥 Run comprehensive health check
+      - name: 🏥 Run health check
         run: |
           echo "Running health checks..."
           
-          HEALTH_COMMAND_ID=$(aws ssm send-command \
+          COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "echo \"=== Container Status ===\"",
-              "docker ps --format \"table {{.Names}}\t{{.Status}}\t{{.Ports}}\" | grep -E \"(NAMES|ecommerce)\"",
-              "",
-              "echo \"\"",
-              "echo \"=== Nginx Status ===\"",
-              "systemctl status nginx --no-pager | head -5",
-              "",
-              "echo \"\"",
-              "echo \"=== Health Endpoints ===\"",
-              "echo \"Nginx Health: $(curl -s http://localhost/nginx-health)\"",
-              "echo \"App Health: $(curl -sk https://localhost/health 2>/dev/null || curl -s http://localhost/health 2>/dev/null || echo \"Failed\")\"",
-              "",
-              "echo \"\"",
-              "echo \"=== Deployment State ===\"",
-              "cat /var/lib/deployment/state.json 2>/dev/null || echo \"No state file\"",
-              "",
-              "echo \"\"",
-              "echo \"=== Recent Logs (last 10 lines) ===\"",
-              "docker logs --tail 10 ecommerce-blue 2>/dev/null || echo \"Blue container not running\"",
-              "docker logs --tail 10 ecommerce-green 2>/dev/null || echo \"Green container not running\""
-            ]' \
+            --parameters "commands=[\"echo '=== Container Status ===' && docker ps --format 'table {{. Names}}\t{{.Status}}\t{{.Ports}}' | grep -E '(NAMES|ecommerce)' && echo '' && echo '=== Health Check ===' && curl -s http://localhost:3001/health || curl -s http://localhost:3002/health && echo '' && echo '=== Deployment State ===' && cat /var/lib/deployment/state.json\"]" \
             --output text \
             --query 'Command.CommandId')
           
-          sleep 15
+          sleep 10
           
           echo "=== Health Check Results ==="
           aws ssm get-command-invocation \
-            --command-id "$HEALTH_COMMAND_ID" \
+            --command-id "$COMMAND_ID" \
             --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
             --query 'StandardOutputContent' \
             --output text
       
-      - name: 📋 Health check summary
+      - name:  📋 Health check summary
         run: |
           echo "### 🏥 Health Check Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Post-deployment verification passed" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
-  # JOB 4: Notify on Failure (Optional)
+  # JOB 4: Notify on Failure
   # ===========================================================================
   notify-failure:
     name: 🚨 Notify on Failure
@@ -421,9 +241,6 @@ jobs:
       - name: 🚨 Create failure summary
         run: |
           echo "### ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
