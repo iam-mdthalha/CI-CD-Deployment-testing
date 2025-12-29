@@ -22,7 +22,7 @@ on:
   # Manual trigger option
   workflow_dispatch:
 
-# Prevent concurrent deployments
+# Prevent concurrent deployment
 concurrency: 
   group: production-deployment
   cancel-in-progress: false
