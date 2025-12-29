@@ -1,0 +1,32 @@
+# =============================================================================
+# Kubernetes Ingress
+# =============================================================================
+#
+# ⚠️  THIS IS A TEMPLATE FILE - NOT ACTIVE
+#
+# =============================================================================
+
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind:  Ingress
+# metadata:
+#   name: ecommerce-frontend
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     cert-manager.io/cluster-issuer:  letsencrypt-prod
+# spec:
+#   tls:
+#     - hosts: 
+#         - your-domain.com
+#       secretName:  ecommerce-tls
+#   rules: 
+#     - host: your-domain. com
+#       http:
+#         paths:
+#           - path: /
+#             pathType:  Prefix
+#             backend:
+#               service:
+#                 name: ecommerce-frontend
+#                 port:
+#                   number: 80

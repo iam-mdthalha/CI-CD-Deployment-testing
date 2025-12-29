@@ -1,0 +1,51 @@
+{
+  "__comment": "⚠️ THIS IS A TEMPLATE FILE - NOT ACTIVE",
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x":  0, "y": 0 },
+      "targets":  [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Response Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y":  0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type":  "stat",
+      "gridPos": { "h": 4, "w": 6, "x":  0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "title": "E-Commerce Frontend Dashboard",
+  "uid": "ecommerce-frontend",
+  "version":  1
+}

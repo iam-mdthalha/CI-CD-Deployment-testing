@@ -1,0 +1,22 @@
+# =============================================================================
+# Terraform Outputs
+# =============================================================================
+#
+# ⚠️  THIS IS A TEMPLATE FILE - NOT ACTIVE
+#
+# =============================================================================
+
+# output "instance_id" {
+#   description = "EC2 instance ID"
+#   value       = aws_instance.ecommerce.id
+# }
+
+# output "public_ip" {
+#   description = "Public IP address"
+#   value       = aws_eip.ecommerce.public_ip
+# }
+
+# output "security_group_id" {
+#   description = "Security group ID"
+#   value       = aws_security_group.ecommerce. id
+# }

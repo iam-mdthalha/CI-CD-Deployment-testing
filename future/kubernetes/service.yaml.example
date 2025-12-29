@@ -1,0 +1,21 @@
+# =============================================================================
+# Kubernetes Service
+# =============================================================================
+#
+# ⚠️  THIS IS A TEMPLATE FILE - NOT ACTIVE
+#
+# =============================================================================
+
+# ---
+# apiVersion: v1
+# kind:  Service
+# metadata: 
+#   name:  ecommerce-frontend
+# spec:
+#   selector:
+#     app: ecommerce-frontend
+#   ports:
+#     - protocol: TCP
+#       port: 80
+#       targetPort: 3000
+#   type:  ClusterIP

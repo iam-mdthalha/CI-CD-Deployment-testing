@@ -1,145 +1,244 @@
 #!/bin/bash
 # =============================================================================
-# Rollback Script - Switch back to previous version
+# Rollback Script - Switch to Previous Version (FINAL)
+# =============================================================================
+# Usage: sudo /opt/ecommerce/scripts/rollback.sh [--force]
 # =============================================================================
 
 set -e
 
+# =============================================================================
+# COLORS
+# =============================================================================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 STATE_FILE="/var/lib/deployment/state.json"
 NGINX_BACKEND_CONF="/etc/nginx/conf.d/active-backend.conf"
 BLUE_PORT=3001
 GREEN_PORT=3002
+ROLLBACK_LOG="/var/log/deployment/rollback-$(date +%Y%m%d-%H%M%S).log"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# =============================================================================
+# LOGGING SAFETY (CRITICAL)
+# =============================================================================
+mkdir -p /var/log/deployment
+touch "$ROLLBACK_LOG"
 
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 log() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')] $1${NC}"
+    echo -e "${GREEN}[$(date '+%H:%M:%S')]${NC} $1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$ROLLBACK_LOG"
 }
 
 error() {
-    echo -e "${RED}[ERROR] $1${NC}"
+    echo -e "${RED}[ERROR]${NC} $1"
+    echo "[ERROR] $1" >> "$ROLLBACK_LOG"
 }
 
 warn() {
-    echo -e "${YELLOW}[WARNING] $1${NC}"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $1" >> "$ROLLBACK_LOG"
 }
 
-# Check root
-if [ "$EUID" -ne 0 ]; then
-    error "This script must be run as root (use sudo)"
-    exit 1
-fi
+# =============================================================================
+# PREFLIGHT
+# =============================================================================
+preflight() {
+    if [ "$EUID" -ne 0 ]; then
+        error "This script must be run as root"
+        exit 1
+    fi
 
-echo ""
-echo "============================================================================="
-echo "               ROLLBACK DEPLOYMENT"
-echo "============================================================================="
-echo ""
+    if [ ! -f "$STATE_FILE" ]; then
+        error "State file not found: $STATE_FILE"
+        exit 1
+    fi
+}
 
-# Get current state
-if [ !  -f "$STATE_FILE" ]; then
-    error "State file not found:  $STATE_FILE"
-    exit 1
-fi
+# =============================================================================
+# READ STATE (WHITESPACE SAFE)
+# =============================================================================
+get_state() {
+    CURRENT_ACTIVE=$(grep -o '"active"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" \
+        | cut -d'"' -f4 || true)
 
-CURRENT_ACTIVE=$(cat "$STATE_FILE" | grep -o '"active":"[^"]*"' | cut -d'"' -f4)
-PREVIOUS_ACTIVE=$(cat "$STATE_FILE" | grep -o '"previous_active":"[^"]*"' | cut -d'"' -f4)
+    PREVIOUS_ACTIVE=$(grep -o '"previous_active"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" \
+        | cut -d'"' -f4 || true)
 
-if [ -z "$PREVIOUS_ACTIVE" ]; then
-    error "No previous deployment found to rollback to"
-    exit 1
-fi
+    if [ -z "$CURRENT_ACTIVE" ]; then
+        error "Cannot determine current active environment"
+        exit 1
+    fi
 
-log "Current active: $CURRENT_ACTIVE"
-log "Rolling back to:  $PREVIOUS_ACTIVE"
+    if [ -z "$PREVIOUS_ACTIVE" ]; then
+        error "No previous deployment found to rollback to"
+        exit 1
+    fi
 
-# Determine ports
-if [ "$PREVIOUS_ACTIVE" == "blue" ]; then
-    ROLLBACK_PORT=$BLUE_PORT
-else
-    ROLLBACK_PORT=$GREEN_PORT
-fi
+    if [ "$PREVIOUS_ACTIVE" = "blue" ]; then
+        ROLLBACK_PORT=$BLUE_PORT
+    else
+        ROLLBACK_PORT=$GREEN_PORT
+    fi
 
-# Check if rollback target is healthy
-log "Checking rollback target health..."
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$ROLLBACK_PORT/health" 2>/dev/null || echo "000")
+    # 🔥 Detect container by port (name-agnostic)
+    ROLLBACK_CONTAINER=$(docker ps \
+        --filter "publish=$ROLLBACK_PORT" \
+        --format "{{.Names}}" | head -n 1 || true)
 
-if [ "$HTTP_CODE" != "200" ]; then
-    error "Rollback target is not healthy (HTTP $HTTP_CODE)"
-    error "Cannot rollback to an unhealthy container"
-    exit 1
-fi
+    if [ -z "$ROLLBACK_CONTAINER" ]; then
+        error "No running container found exposing port $ROLLBACK_PORT"
+        exit 1
+    fi
+}
 
-log "✅ Rollback target is healthy"
+# =============================================================================
+# HEALTH CHECK
+# =============================================================================
+check_rollback_target() {
+    log "Checking rollback target health..."
 
-# Confirm rollback
-echo ""
-warn "This will switch traffic from $CURRENT_ACTIVE to $PREVIOUS_ACTIVE"
-read -p "Continue with rollback? (y/n): " -n 1 -r
-echo ""
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        "http://localhost:$ROLLBACK_PORT/health" || echo "000")
 
-if [[ !  $REPLY =~ ^[Yy]$ ]]; then
-    log "Rollback cancelled"
-    exit 0
-fi
+    if [ "$HTTP_CODE" = "200" ]; then
+        log "Rollback target is healthy (HTTP 200)"
+    else
+        error "Rollback target unhealthy (HTTP $HTTP_CODE)"
+        exit 1
+    fi
+}
 
-# Update Nginx config
-log "Updating Nginx configuration..."
+# =============================================================================
+# CONFIRMATION
+# =============================================================================
+confirm_rollback() {
+    if [ "$1" = "--force" ]; then
+        log "Force flag detected — skipping confirmation"
+        return
+    fi
 
-cat > "$NGINX_BACKEND_CONF" << EOF
-# Active Backend Configuration
-# ROLLBACK at $(date)
-# Active: $PREVIOUS_ACTIVE
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                    ROLLBACK CONFIRMATION${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "  Current active:   $CURRENT_ACTIVE"
+    echo "  Rollback to:     $PREVIOUS_ACTIVE (port $ROLLBACK_PORT)"
+    echo ""
+    echo -e "${YELLOW}  This will switch production traffic to the previous version.${NC}"
+    echo ""
 
+    read -p "  Continue with rollback? (yes/no): " CONFIRM
+
+    if [ "$CONFIRM" != "yes" ]; then
+        log "Rollback cancelled by user"
+        exit 0
+    fi
+}
+
+# =============================================================================
+# PERFORM ROLLBACK
+# =============================================================================
+perform_rollback() {
+    log "Starting rollback..."
+    log "Updating Nginx configuration..."
+
+    cat > "$NGINX_BACKEND_CONF" <<EOF
+# Rollback at $(date)
 upstream active_backend {
-    server 127.0.0.1:$ROLLBACK_PORT;  # Rollback to:  ${PREVIOUS_ACTIVE^^}
+    server 127.0.0.1:$ROLLBACK_PORT;
     keepalive 32;
 }
 EOF
 
-# Test and reload Nginx
-if nginx -t; then
-    systemctl reload nginx
-    log "✅ Nginx reloaded"
-else
-    error "Nginx config invalid!"
-    exit 1
-fi
+    log "Testing Nginx configuration..."
+    nginx -t &>/dev/null || { error "Nginx configuration invalid"; exit 1; }
 
-# Update state file
-cat > "$STATE_FILE" << EOF
+    log "Reloading Nginx..."
+    systemctl reload nginx
+    log "Nginx reloaded successfully"
+
+    log "Updating state file..."
+    cat > "$STATE_FILE" <<EOF
 {
-    "active":  "$PREVIOUS_ACTIVE",
+    "active": "$PREVIOUS_ACTIVE",
     "blue_port": $BLUE_PORT,
     "green_port": $GREEN_PORT,
     "previous_active": "$CURRENT_ACTIVE",
-    "last_rollback_time": "$(date -Iseconds)"
+    "last_rollback_time": "$(date -Iseconds)",
+    "rollback_reason": "manual"
 }
 EOF
 
-log "✅ State updated"
+    log "State file updated"
+}
 
-# Verify
-log "Verifying rollback..."
-PROD_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "https://localhost/health" 2>/dev/null || echo "000")
+# =============================================================================
+# VERIFY
+# =============================================================================
+verify_rollback() {
+    log "Verifying rollback..."
+    sleep 2
 
-if [ "$PROD_CODE" == "200" ]; then
-    log "✅ Production health check passed"
-else
-    warn "Production returned HTTP $PROD_CODE"
-fi
+    HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+        "https://localhost/health" || echo "000")
 
-echo ""
-echo "============================================================================="
-echo "               ROLLBACK COMPLETE"
-echo "============================================================================="
-echo ""
-echo "  Previous Active: $CURRENT_ACTIVE"
-echo "  Current Active:  $PREVIOUS_ACTIVE (port $ROLLBACK_PORT)"
-echo ""
-echo "============================================================================="
-echo ""
+    if [ "$HTTP_CODE" = "200" ]; then
+        log "Production health check passed (HTTP 200)"
+    else
+        warn "Production health check returned HTTP $HTTP_CODE"
+    fi
+
+    log "Container status:"
+    docker ps --format "table {{.Names}}\t{{.Status}}" \
+        | grep -E "(NAMES|ecommerce|quirky_|green|blue)"
+}
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+summary() {
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}                    ROLLBACK COMPLETE${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "  Previous active: $CURRENT_ACTIVE"
+    echo "  Current active:  $PREVIOUS_ACTIVE (port $ROLLBACK_PORT)"
+    echo ""
+    echo "  Log file: $ROLLBACK_LOG"
+    echo ""
+}
+
+# =============================================================================
+# MAIN
+# =============================================================================
+main() {
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                    ROLLBACK DEPLOYMENT"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+
+    preflight
+    get_state
+    check_rollback_target
+    confirm_rollback "$1"
+    perform_rollback
+    verify_rollback
+    summary
+
+    log "Rollback completed successfully"
+}
+
+main "$@"

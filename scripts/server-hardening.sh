@@ -449,7 +449,7 @@ configure_auto_updates() {
     apt install -y unattended-upgrades apt-listchanges
     
     # Configure unattended-upgrades
-    cat > /etc/apt/apt.conf. d/50unattended-upgrades << 'EOF'
+    cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'EOF'
 Unattended-Upgrade:: Allowed-Origins {
     "${distro_id}:${distro_codename}";
     "${distro_id}:${distro_codename}-security";
