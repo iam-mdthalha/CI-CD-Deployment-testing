@@ -73,7 +73,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       
-      - name: 🏷️ Generate Docker metadata
+      - name:  🏷️ Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -158,7 +158,7 @@ jobs:
             --parameters "commands=[\"sudo /usr/local/bin/deploy-app.sh ${{ env.DOCKER_IMAGE }}:latest\"]" \
             --timeout-seconds 300 \
             --output text \
-            --query 'Command.CommandId')
+            --query 'Command. CommandId')
           
           echo "Command ID: $COMMAND_ID"
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
