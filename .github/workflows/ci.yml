@@ -18,9 +18,9 @@ on:
       - opened
       - synchronize
       - reopened
-    paths:
-      - 'ecommerce-frontend/**'
-      - '. github/workflows/ci.yml'
+    # paths:
+    #   - 'ecommerce-frontend/**'
+    #   - '. github/workflows/ci.yml'
 
   # 🔥 NEW: Also run on push to main (after PR merge) - This triggers CD! 
   push: 
