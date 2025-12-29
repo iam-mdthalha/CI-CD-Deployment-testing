@@ -1,0 +1,121 @@
+# =============================================================================
+# Ansible Playbook for E-Commerce Frontend
+# =============================================================================
+#
+# ⚠️  THIS IS A TEMPLATE FILE - NOT ACTIVE
+# ⚠️  Copy to playbook.yml and customize before use
+#
+# Usage:  ansible-playbook -i inventory playbook. yml
+#
+# =============================================================================
+
+# ---
+# - name: Configure E-Commerce Frontend Server
+#   hosts:  ecommerce_servers
+#   become: yes
+#   vars: 
+#     docker_image: "jmdthalha/ecommerce-frontend: latest"
+#     app_port: 3000
+#     blue_port: 3001
+#     green_port: 3002
+#
+#   tasks: 
+#     # ------------------------------------------
+#     # System Updates
+#     # ------------------------------------------
+#     - name: Update apt cache
+#       apt: 
+#         update_cache: yes
+#         cache_valid_time: 3600
+#
+#     - name: Install required packages
+#       apt:
+#         name:
+#           - docker.io
+#           - nginx
+#           - certbot
+#           - python3-certbot-nginx
+#           - curl
+#           - jq
+#         state: present
+#
+#     # ------------------------------------------
+#     # Docker Setup
+#     # ------------------------------------------
+#     - name: Start Docker service
+#       service: 
+#         name:  docker
+#         state: started
+#         enabled: yes
+#
+#     - name: Add ubuntu user to docker group
+#       user:
+#         name: ubuntu
+#         groups: docker
+#         append: yes
+#
+#     - name:  Pull Docker image
+#       docker_image:
+#         name: "{{ docker_image }}"
+#         source: pull
+#
+#     # ------------------------------------------
+#     # Nginx Setup
+#     # ------------------------------------------
+#     - name: Copy Nginx configuration
+#       template:
+#         src: templates/nginx.conf. j2
+#         dest: /etc/nginx/sites-available/ecommerce
+#       notify:  Reload Nginx
+#
+#     - name: Enable Nginx site
+#       file:
+#         src: /etc/nginx/sites-available/ecommerce
+#         dest: /etc/nginx/sites-enabled/ecommerce
+#         state:  link
+#       notify: Reload Nginx
+#
+#     - name: Remove default Nginx site
+#       file:
+#         path: /etc/nginx/sites-enabled/default
+#         state: absent
+#       notify: Reload Nginx
+#
+#     # ------------------------------------------
+#     # Deployment Scripts
+#     # ------------------------------------------
+#     - name: Copy deployment script
+#       copy: 
+#         src:  files/deploy-app.sh
+#         dest: /usr/local/bin/deploy-app.sh
+#         mode: '0755'
+#
+#     - name: Copy health status script
+#       copy:
+#         src: files/health-status.sh
+#         dest: /usr/local/bin/health-status.sh
+#         mode:  '0755'
+#
+#     # ------------------------------------------
+#     # Firewall
+#     # ------------------------------------------
+#     - name: Configure UFW
+#       ufw:
+#         rule: allow
+#         port: "{{ item }}"
+#         proto: tcp
+#       loop:
+#         - "80"
+#         - "443"
+#
+#     - name:  Enable UFW
+#       ufw: 
+#         state: enabled
+#         default: deny
+#         direction: incoming
+#
+#   handlers:
+#     - name: Reload Nginx
+#       service:
+#         name: nginx
+#         state: reloaded

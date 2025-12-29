@@ -1,0 +1,57 @@
+# =============================================================================
+# Kubernetes Deployment
+# =============================================================================
+#
+# ⚠️  THIS IS A TEMPLATE FILE - NOT ACTIVE
+#
+# =============================================================================
+
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: ecommerce-frontend
+#   labels:
+#     app: ecommerce-frontend
+# spec:
+#   replicas: 3
+#   selector: 
+#     matchLabels:
+#       app: ecommerce-frontend
+#   strategy:
+#     type: RollingUpdate
+#     rollingUpdate:
+#       maxSurge:  1
+#       maxUnavailable:  0
+#   template:
+#     metadata:
+#       labels:
+#         app: ecommerce-frontend
+#     spec:
+#       containers:
+#         - name: ecommerce-frontend
+#           image: jmdthalha/ecommerce-frontend:latest
+#           ports:
+#             - containerPort: 3000
+#           env:
+#             - name: NODE_ENV
+#               value:  "production"
+#           resources:
+#             requests:
+#               memory: "128Mi"
+#               cpu: "100m"
+#             limits:
+#               memory: "256Mi"
+#               cpu: "500m"
+#           livenessProbe:
+#             httpGet:
+#               path: /health
+#               port:  3000
+#             initialDelaySeconds: 30
+#             periodSeconds: 10
+#           readinessProbe:
+#             httpGet:
+#               path: /health
+#               port:  3000
+#             initialDelaySeconds: 5
+#             periodSeconds: 5
