@@ -3,7 +3,6 @@
 # =============================================================================
 # Triggers:   
 #   1. Pull requests to main branch (validation before merge)
-#   2. Push to main branch (after merge - triggers CD chain)
 # Purpose:  Lint, test, and build Docker image (NO push)
 # =============================================================================
 
@@ -21,14 +20,6 @@ on:
     # paths:
     #   - 'ecommerce-frontend/**'
     #   - '. github/workflows/ci.yml'
-
-  # 🔥 NEW: Also run on push to main (after PR merge) - This triggers CD! 
-  push: 
-    branches:
-      - main
-    paths:
-      - 'ecommerce-frontend/**'
-      - '.github/workflows/ci.yml'
 
   # Allow manual trigger for testing
   workflow_dispatch: 
@@ -51,10 +42,10 @@ env:
   WORKING_DIRECTORY: ./ecommerce-frontend
 
 # =============================================================================
-# Cancel previous runs on same PR/branch
+# Cancel previous runs on same PR ONLY (FIXED)
 # =============================================================================
 concurrency:  
-  group:  ci-${{ github.head_ref || github.ref }}
+  group: ci-pr-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -64,22 +55,22 @@ jobs:
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
-    timeout-minutes:  10
+    timeout-minutes: 10
 
     defaults:
       run:  
         working-directory: ./ecommerce-frontend
 
     steps: 
-      - name:  Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node. js
-        uses:  actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:  
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path:  './ecommerce-frontend/package-lock.json'
+          cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
         run: npm ci
@@ -95,7 +86,7 @@ jobs:
   # ===========================================================================
   test:
     name: Run Tests (Skipped)
-    runs-on:  ubuntu-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: lint
 
@@ -120,7 +111,7 @@ jobs:
   build: 
     name: Build Application
     runs-on: ubuntu-latest
-    timeout-minutes:  15
+    timeout-minutes: 15
     needs: lint
 
     defaults:
@@ -131,7 +122,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name:  Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:  
           node-version: ${{ env.NODE_VERSION }}
@@ -139,7 +130,7 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run:  npm ci
+        run: npm ci
 
       - name: Build React Application
         run: |
@@ -149,7 +140,7 @@ jobs:
           CI: false
           DISABLE_ESLINT_PLUGIN: true
 
-      - name:  Verify Build Output
+      - name: Verify Build Output
         run: |
           echo "=== Verifying Build Output ==="
           if [ -d "build" ]; then
@@ -170,15 +161,15 @@ jobs:
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:  
-          name:  build-output
+          name: build-output
           path: ecommerce-frontend/build/
-          retention-days:  7
+          retention-days: 7
 
   # ===========================================================================
   # JOB 4: Docker Build (NO PUSH)
   # ===========================================================================
   docker-build:  
-    name:  Build Docker Image
+    name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [lint, test, build]
@@ -190,7 +181,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name:  Generate Image Tag
+      - name: Generate Image Tag
         id: tag
         run: |
           SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)
@@ -202,9 +193,9 @@ jobs:
           echo "Tag: ${IMAGE_TAG}"
 
       - name: Build Docker Image
-        uses:  docker/build-push-action@v5
+        uses: docker/build-push-action@v5
         with:  
-          context:  ./ecommerce-frontend
+          context: ./ecommerce-frontend
           file: ./ecommerce-frontend/Dockerfile
           push: false
           load: true
@@ -217,7 +208,7 @@ jobs:
             NODE_ENV=production
             SERVICE_NAME=${{ env.SERVICE_NAME }}
 
-      - name:  Verify Docker Image
+      - name: Verify Docker Image
         run: |
           echo "=== Verifying Docker Image ==="
           docker images | grep ${{ env.DOCKER_IMAGE_NAME }}
@@ -249,7 +240,7 @@ jobs:
         run: |
           echo "=== Testing Health Endpoint ==="
           
-          for i in {1.. 5}; do
+          for i in {1..5}; do
             echo "Attempt $i..."
             if curl -sf http://localhost:3000/health; then
               echo ""
@@ -263,7 +254,7 @@ jobs:
           docker logs test-container
           exit 1
 
-      - name:  Validate Health Response
+      - name: Validate Health Response
         run: |
           echo "=== Validating Health Response ==="
           
@@ -308,7 +299,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name:  Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:  
           node-version: ${{ env.NODE_VERSION }}
@@ -316,10 +307,10 @@ jobs:
           cache-dependency-path: './ecommerce-frontend/package-lock.json'
 
       - name: Install Dependencies
-        run:  npm ci
+        run: npm ci
 
       - name: Run npm audit
-        run:  |
+        run: |
           echo "=== Running npm audit ==="
           npm audit --audit-level=high || true
         continue-on-error: true
@@ -332,8 +323,8 @@ jobs:
           
           if grep -riE "(password|secret|api_key|apikey|access_token)\s*[: =]\s*['\"][^'\"]+['\"]" \
             --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" \
-            --exclude-dir=node_modules .  2>/dev/null; then
-            echo ":: warning:: Potential secret found in code"
+            --exclude-dir=node_modules . 2>/dev/null; then
+            echo "::warning::Potential secret found in code"
             FOUND_SECRETS=true
           fi
           
@@ -342,14 +333,16 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Check . env files not committed
-        working-directory: . 
+      - name: Check .env files not committed
+        working-directory: .
         run: |
           echo "=== Checking for .env files ==="
           
-          if find . -name ".env" -not -name ".env.example" -not -path "./node_modules/*" -not -path "./ecommerce-frontend/node_modules/*" | grep -q .; then
+          if find . -name ".env" -not -name ".env.example" \
+            -not -path "./node_modules/*" \
+            -not -path "./ecommerce-frontend/node_modules/*" | grep -q .; then
             echo "❌ Found .env file(s) that should not be committed:"
-            find . -name ".env" -not -name ".env.example" -not -path "./node_modules/*" -not -path "./ecommerce-frontend/node_modules/*"
+            find . -name ".env" -not -name ".env.example"
             exit 1
           else
             echo "✅ No .env files found (only .env.example allowed)"
@@ -360,86 +353,25 @@ jobs:
   # ===========================================================================
   ci-summary:
     name: CI Summary
-    runs-on:  ubuntu-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs:  [lint, test, build, docker-build, security-scan]
+    needs: [lint, test, build, docker-build, security-scan]
     if: always()
 
     steps:
-      - name:  Check Job Results
+      - name: Check Job Results
         run: |
           echo "=========================================="
           echo "           CI PIPELINE SUMMARY            "
           echo "=========================================="
           echo ""
-          echo "Trigger:          ${{ github.event_name }}"
-          echo "Branch:          ${{ github.ref_name }}"
+          echo "Trigger:         ${{ github.event_name }}"
+          echo "PR Number:      ${{ github.event.pull_request.number }}"
           echo ""
-          echo "Lint:             ${{ needs.lint.result }}"
-          echo "Test:             ${{ needs.test.result }} (SKIPPED)"
-          echo "Build:            ${{ needs.build.result }}"
-          echo "Docker Build:    ${{ needs.docker-build.result }}"
-          echo "Security Scan:   ${{ needs.security-scan.result }}"
+          echo "Lint:           ${{ needs.lint.result }}"
+          echo "Test:           ${{ needs.test.result }} (SKIPPED)"
+          echo "Build:          ${{ needs.build.result }}"
+          echo "Docker Build:   ${{ needs.docker-build.result }}"
+          echo "Security Scan:  ${{ needs.security-scan.result }}"
           echo ""
           echo "=========================================="
-
-      - name:  Determine Overall Status
-        run: |
-          if [[ "${{ needs.lint.result }}" == "failure" ]] || \
-             [[ "${{ needs.build.result }}" == "failure" ]] || \
-             [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
-            echo "❌ CI FAILED"
-            exit 1
-          else
-            echo "✅ CI PASSED"
-          fi
-
-      - name: Post PR Comment (Success)
-        if: success() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with: 
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## ✅ CI Pipeline Passed
-            
-            | Check | Status |
-            |-------|--------|
-            | Lint | ✅ Passed |
-            | Test | ⏭️ Skipped (to be fixed) |
-            | Build | ✅ Passed |
-            | Docker Build | ✅ Passed |
-            | Security Scan | ✅ Passed |
-            
-            **Ready for review!**
-            
-            ---
-            *Commit:  ${{ github.event.pull_request.head.sha }}*`
-            })
-
-      - name: Post PR Comment (Failure)
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script:  |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## ❌ CI Pipeline Failed
-            
-            | Check | Status |
-            |-------|--------|
-            | Lint | ${{ needs.lint.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-            | Test | ⏭️ Skipped |
-            | Build | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-            | Docker Build | ${{ needs.docker-build.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-            | Security Scan | ${{ needs.security-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-            
-            **Please fix the failing checks before merging.**
-            
-            ---
-            *Commit: ${{ github.event.pull_request.head.sha }}*`
-            })
