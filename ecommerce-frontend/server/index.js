@@ -7,11 +7,11 @@ const path = require('path');
 const healthRouter = require('./health');
 
 // =============================================================================
-// Environment Variables
+// Environment Variables (FIXED – NO SPACES)
 // =============================================================================
-const PORT = process.env. PORT || 3000;
-const HOST = process.env. HOST || '0.0.0.0';
-const NODE_ENV = process. env.NODE_ENV || 'production';
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+const NODE_ENV = process.env.NODE_ENV || 'production';
 const SERVICE_NAME = process.env.SERVICE_NAME || 'ecommerce-frontend';
 const SERVICE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 
@@ -25,10 +25,12 @@ const app = express();
 // =============================================================================
 
 // Security headers (configured for React SPA)
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  })
+);
 
 // Compression
 app.use(compression());
@@ -41,14 +43,13 @@ app.use('/health', healthRouter);
 // =============================================================================
 // Serve React Static Build
 // =============================================================================
-const buildPath = path. join(__dirname, '../build');
+const buildPath = path.join(__dirname, '../build');
 
-// Serve static files from React build
+// Serve static assets
 app.use(express.static(buildPath));
 
-// Handle React Router - serve index.html for all non-API routes
-// Using new path-to-regexp syntax for Express 5 / path-to-regexp 8+
-app.get('/{*path}', (req, res) => {
+// React Router fallback (FIXED WILDCARD)
+app.get('*', (req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
@@ -64,15 +65,15 @@ app.use((err, req, res, next) => {
 });
 
 // =============================================================================
-// Server Start
+// Server Start (BINDING FIXED)
 // =============================================================================
 const server = app.listen(PORT, HOST, () => {
-  console.log('='. repeat(60));
+  console.log('='.repeat(60));
   console.log(`${SERVICE_NAME} v${SERVICE_VERSION}`);
   console.log('='.repeat(60));
   console.log(`Environment:   ${NODE_ENV}`);
   console.log(`Server:        http://${HOST}:${PORT}`);
-  console.log(`Health:       http://${HOST}:${PORT}/health`);
+  console.log(`Health:        http://${HOST}:${PORT}/health`);
   console.log(`Serving:       ${buildPath}`);
   console.log('='.repeat(60));
 });
@@ -82,6 +83,7 @@ const server = app.listen(PORT, HOST, () => {
 // =============================================================================
 const shutdown = (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
+
   server.close(() => {
     console.log('HTTP server closed.');
     process.exit(0);
