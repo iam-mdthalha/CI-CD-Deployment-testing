@@ -7,7 +7,7 @@ const path = require('path');
 const healthRouter = require('./health');
 
 // =============================================================================
-// Environment Variables (FIXED – NO SPACES)
+// Environment Variables
 // =============================================================================
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -16,15 +16,11 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'ecommerce-frontend';
 const SERVICE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 
 // =============================================================================
-// Express App Initialization
+// Express App Setup
 // =============================================================================
 const app = express();
 
-// =============================================================================
-// Middleware
-// =============================================================================
-
-// Security headers (configured for React SPA)
+// Security Headers
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -36,7 +32,7 @@ app.use(
 app.use(compression());
 
 // =============================================================================
-// Health Check Endpoint (REQUIRED - DO NOT REMOVE)
+// Health Check Endpoint
 // =============================================================================
 app.use('/health', healthRouter);
 
@@ -44,15 +40,12 @@ app.use('/health', healthRouter);
 // Serve React Static Build
 // =============================================================================
 const buildPath = path.join(__dirname, '../build');
-
-// Serve static assets
 app.use(express.static(buildPath));
 
-// React Router fallback (FIXED WILDCARD)
-app.get(/^(?!\/health).*$/, (req, res) => {
+// SPA React Router Fallback (DO NOT use app.get('*')!)
+app.get(/^(?!\/health).*/, (req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
-
 
 // =============================================================================
 // Error Handler
@@ -66,7 +59,7 @@ app.use((err, req, res, next) => {
 });
 
 // =============================================================================
-// Server Start (BINDING FIXED)
+// Server Start
 // =============================================================================
 const server = app.listen(PORT, HOST, () => {
   console.log('='.repeat(60));
@@ -84,12 +77,10 @@ const server = app.listen(PORT, HOST, () => {
 // =============================================================================
 const shutdown = (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-
   server.close(() => {
     console.log('HTTP server closed.');
     process.exit(0);
   });
-
   setTimeout(() => {
     console.error('Forcing shutdown after timeout.');
     process.exit(1);
