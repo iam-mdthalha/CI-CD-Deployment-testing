@@ -94,6 +94,7 @@ jobs:
           context: ./ecommerce-frontend
           file: ./ecommerce-frontend/Dockerfile
           push: true
+          no-cache: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
