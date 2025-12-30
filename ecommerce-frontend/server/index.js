@@ -49,9 +49,10 @@ const buildPath = path.join(__dirname, '../build');
 app.use(express.static(buildPath));
 
 // React Router fallback (FIXED WILDCARD)
-app.get('*', (req, res) => {
+app.get(/^(?!\/health).*$/, (req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
+
 
 // =============================================================================
 // Error Handler
