@@ -9,46 +9,41 @@ const healthRouter = require('./health');
 // =============================================================================
 // Environment Variables
 // =============================================================================
-const PORT = process.env. PORT || 3000;
-const HOST = process.env. HOST || '0.0.0.0';
-const NODE_ENV = process. env.NODE_ENV || 'production';
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+const NODE_ENV = process.env.NODE_ENV || 'production';
 const SERVICE_NAME = process.env.SERVICE_NAME || 'ecommerce-frontend';
 const SERVICE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 
 // =============================================================================
-// Express App Initialization
+// Express App Setup
 // =============================================================================
 const app = express();
 
-// =============================================================================
-// Middleware
-// =============================================================================
-
-// Security headers (configured for React SPA)
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
+// Security Headers
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  })
+);
 
 // Compression
 app.use(compression());
 
 // =============================================================================
-// Health Check Endpoint (REQUIRED - DO NOT REMOVE)
+// Health Check Endpoint
 // =============================================================================
 app.use('/health', healthRouter);
 
 // =============================================================================
 // Serve React Static Build
 // =============================================================================
-const buildPath = path. join(__dirname, '../build');
-
-// Serve static files from React build
+const buildPath = path.join(__dirname, '../build');
 app.use(express.static(buildPath));
 
-// Handle React Router - serve index.html for all non-API routes
-// Using new path-to-regexp syntax for Express 5 / path-to-regexp 8+
-app.get('/{*path}', (req, res) => {
+// SPA React Router Fallback (DO NOT use app.get('*')!)
+app.get(/^(?!\/health).*/, (req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
@@ -67,12 +62,12 @@ app.use((err, req, res, next) => {
 // Server Start
 // =============================================================================
 const server = app.listen(PORT, HOST, () => {
-  console.log('='. repeat(60));
+  console.log('='.repeat(60));
   console.log(`${SERVICE_NAME} v${SERVICE_VERSION}`);
   console.log('='.repeat(60));
   console.log(`Environment:   ${NODE_ENV}`);
   console.log(`Server:        http://${HOST}:${PORT}`);
-  console.log(`Health:       http://${HOST}:${PORT}/health`);
+  console.log(`Health:        http://${HOST}:${PORT}/health`);
   console.log(`Serving:       ${buildPath}`);
   console.log('='.repeat(60));
 });
@@ -86,7 +81,6 @@ const shutdown = (signal) => {
     console.log('HTTP server closed.');
     process.exit(0);
   });
-
   setTimeout(() => {
     console.error('Forcing shutdown after timeout.');
     process.exit(1);
